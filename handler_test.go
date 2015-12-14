@@ -11,8 +11,13 @@ import (
 	"strings"
 	"testing"
 
+	// Using postgres sql driver
+	_ "github.com/lib/pq"
+
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/gorm"
+
+	"github.com/theplant/resources"
 )
 
 type Resource struct {
@@ -47,18 +52,37 @@ func (u *User) GetID() uint {
 }
 
 var (
+	db *gorm.DB
+
 	res resources.Resource
 
 	router *gin.Engine
 )
 
-func TestMain(m *testing.M) {
-	db.DB.DropTableIfExists(&Resource{})
-	db.DB.AutoMigrate(&Resource{})
-	db.DB.DropTableIfExists(&User{})
-	db.DB.AutoMigrate(&User{})
+func openDB() {
+	username := os.Getenv("DATABASE_POSTGRESQL_USERNAME")
+	password := os.Getenv("DATABASE_POSTGRESQL_PASSWORD")
+	database := os.Getenv("DATABASE_NAME_TEST")
+	dbURL := fmt.Sprintf("postgres://%s:%s@localhost/%s?sslmode=disable", username, password, database)
+	fmt.Println(dbURL)
 
-	res = resources.New(db.DB,
+	db_, err := gorm.Open("postgres", dbURL)
+	if err != nil {
+		panic(err)
+	}
+
+	db = &db_
+}
+
+func TestMain(m *testing.M) {
+	openDB()
+
+	db.DropTableIfExists(&Resource{})
+	db.AutoMigrate(&Resource{})
+	db.DropTableIfExists(&User{})
+	db.AutoMigrate(&User{})
+
+	res = resources.New(db,
 		func() resources.DBModel { return &Resource{} },
 		func() interface{} { return []Resource{} },
 		func(id uint) string { return fmt.Sprintf("/r/%d", id) })
@@ -71,7 +95,7 @@ func TestMain(m *testing.M) {
 
 func TestPost(t *testing.T) {
 	u := User{}
-	utils.AssertNoErr(t, db.DB.Save(&u).Error)
+	assertNoErr(db.Save(&u).Error)
 
 	req := mountOwnerHandler(t, &u, res.Post)
 
@@ -87,7 +111,7 @@ func TestPost(t *testing.T) {
 	}
 
 	r := &Resource{}
-	utils.AssertNoErr(t, db.DB.Find(&r).Error) // Assuming there's only one resource in the DB...
+	assertNoErr(db.Find(&r).Error) // Assuming there's only one resource in the DB...
 
 	if r.UserID != u.ID {
 		t.Fatalf("Didn't take ownership of resource\nexpected: '%v'\ngot:      '%v'", u.ID, r.UserID)
@@ -109,7 +133,7 @@ func TestPost(t *testing.T) {
 
 func TestGet(t *testing.T) {
 	r := Resource{}
-	utils.AssertNoErr(t, db.DB.Save(&r).Error)
+	assertNoErr(db.Save(&r).Error)
 
 	req := mountResourceHandler(t, &r, res.Get)
 	res := req(nil)
@@ -129,7 +153,7 @@ func TestGet(t *testing.T) {
 
 func TestPatch(t *testing.T) {
 	r := Resource{}
-	utils.AssertNoErr(t, db.DB.Save(&r).Error)
+	assertNoErr(db.Save(&r).Error)
 
 	req := mountResourceHandler(t, &r, res.Patch)
 
@@ -145,7 +169,7 @@ func TestPatch(t *testing.T) {
 	}
 
 	reloaded := &Resource{}
-	utils.AssertNoErr(t, db.DB.Where("id = ?", r.ID).Find(&reloaded).Error)
+	assertNoErr(db.Where("id = ?", r.ID).Find(&reloaded).Error)
 
 	if reloaded.Text != update.Text {
 		t.Fatalf("Didn't update resource\nexpected: '%v'\ngot:      '%v'", update.Text, reloaded.Text)
@@ -161,7 +185,7 @@ func TestPatch(t *testing.T) {
 
 func TestDelete(t *testing.T) {
 	r := Resource{}
-	utils.AssertNoErr(t, db.DB.Save(&r).Error)
+	assertNoErr(db.Save(&r).Error)
 
 	req := mountResourceHandler(t, &r, res.Delete)
 	resp := req(nil)
@@ -172,7 +196,7 @@ func TestDelete(t *testing.T) {
 	}
 
 	reloaded := &Resource{}
-	err := db.DB.Where("id = ?", r.ID).Find(&reloaded).Error
+	err := db.Where("id = ?", r.ID).Find(&reloaded).Error
 	if err != gorm.RecordNotFound {
 		t.Fatalf("Deleted resource still found in database")
 	}
@@ -211,7 +235,7 @@ func mountHandler(t *testing.T, handler func(*gin.Context)) func(body io.Reader)
 
 func TestPublicFinder(t *testing.T) {
 	r := Resource{}
-	utils.AssertNoErr(t, db.DB.Save(&r).Error)
+	assertNoErr(db.Save(&r).Error)
 
 	router = gin.New()
 	router.GET("/r/:id", res.PublicFinder(func(c *gin.Context, s resources.DBModel) {
@@ -246,10 +270,10 @@ func TestPrivateFinder(t *testing.T) {
 	userID := uint(10)
 
 	r := Resource{UserID: userID}
-	utils.AssertNoErr(t, db.DB.Save(&r).Error)
+	assertNoErr(db.Save(&r).Error)
 
 	u := User{Model: gorm.Model{ID: userID}}
-	utils.AssertNoErr(t, db.DB.Save(&u).Error)
+	assertNoErr(db.Save(&u).Error)
 
 	userProvider := func(handler func(*gin.Context, resources.User)) gin.HandlerFunc {
 		return func(ctx *gin.Context) {
@@ -290,7 +314,7 @@ func doRequest(t *testing.T, method string, path string, body io.Reader) *httpte
 
 	w := httptest.NewRecorder()
 	req, err := http.NewRequest(method, path, body)
-	utils.AssertNoErr(t, err)
+	assertNoErr(err)
 	router.ServeHTTP(w, req)
 
 	return w
@@ -299,14 +323,14 @@ func doRequest(t *testing.T, method string, path string, body io.Reader) *httpte
 func body(t *testing.T, res *httptest.ResponseRecorder) string {
 	b, err := res.Body.ReadString(0)
 	if err != nil && err != io.EOF {
-		utils.AssertNoErr(t, err)
+		assertNoErr(err)
 	}
 	return strings.TrimSpace(b)
 }
 
 func postBody(t *testing.T, r interface{}) io.Reader {
 	m, err := json.Marshal(r)
-	utils.AssertNoErr(t, err)
+	assertNoErr(err)
 
 	return strings.NewReader(string(m[:]))
 
@@ -314,7 +338,13 @@ func postBody(t *testing.T, r interface{}) io.Reader {
 
 func jsonString(t *testing.T, r interface{}) string {
 	m, err := json.Marshal(r)
-	utils.AssertNoErr(t, err)
+	assertNoErr(err)
 
 	return strings.TrimSpace(string(m[:]))
+}
+
+func assertNoErr(err error) {
+	if err != nil {
+		panic(err)
+	}
 }
