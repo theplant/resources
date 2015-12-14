@@ -2,8 +2,10 @@ package resources_test
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -24,17 +26,8 @@ type Resource struct {
 	gorm.Model
 
 	UserID uint
+	User   User
 	Text   string `binding:"required"`
-}
-
-// OwnerID part of resources.DBModel
-func (r *Resource) OwnerID() uint {
-	return r.UserID
-}
-
-// SetOwnerID part of resources.DBModel
-func (r *Resource) SetOwnerID(id uint) {
-	r.UserID = id
 }
 
 // GetID part of resources.DBModel
@@ -42,13 +35,63 @@ func (r *Resource) GetID() uint {
 	return r.ID
 }
 
+// OwnerID part of resources.DBModel
+func (r *Resource) OwnerID() uint {
+	return r.ParentID()
+}
+
+// SetOwner part of resources.DBModel
+func (r *Resource) SetOwner(user resources.User) error {
+	parent, ok := user.(resources.DBModel)
+	if !ok {
+		return errors.New("user must be a model")
+	}
+	return r.SetParent(parent)
+}
+
+// ParentID part of resources.DBModel
+func (r *Resource) ParentID() uint {
+	return r.UserID
+}
+
+// SetParent part of resources.DBModel
+func (r *Resource) SetParent(model resources.DBModel) error {
+	owner, ok := model.(*User)
+	if !ok {
+		return errors.New("owner isn't a user")
+	}
+	r.User = *owner
+	r.UserID = owner.ID
+	return nil
+}
+
 type User struct {
 	gorm.Model
 }
 
-// GetID part of resources.User
+// GetID part of resources.DBModel
 func (u *User) GetID() uint {
 	return u.ID
+}
+
+// OwnerID part of resources.DBModel
+func (u *User) OwnerID() uint {
+	return u.ParentID()
+}
+
+// SetOwner part of resources.DBModel
+func (u *User) SetOwner(user resources.User) error {
+	return errors.New("user can't have a owner")
+}
+
+// ParentID part of resources.DBModel
+func (u *User) ParentID() uint {
+	panic("user don't have a parent id")
+}
+
+// SetParent part of resources.DBModel
+func (u *User) SetParent(model resources.DBModel) error {
+	return errors.New("user can't have a parent")
 }
 
 var (
@@ -97,7 +140,7 @@ func TestPost(t *testing.T) {
 	u := User{}
 	assertNoErr(db.Save(&u).Error)
 
-	req := mountOwnerHandler(t, &u, res.Post)
+	req := mountOwnerParentHandler(t, &u, &u, res.Post)
 
 	body := struct {
 		Text string
@@ -111,7 +154,7 @@ func TestPost(t *testing.T) {
 	}
 
 	r := &Resource{}
-	assertNoErr(db.Find(&r).Error) // Assuming there's only one resource in the DB...
+	assertNoErr(db.Preload("User").Find(&r).Error) // Assuming there's only one resource in the DB...
 
 	if r.UserID != u.ID {
 		t.Fatalf("Didn't take ownership of resource\nexpected: '%v'\ngot:      '%v'", u.ID, r.UserID)
@@ -121,6 +164,11 @@ func TestPost(t *testing.T) {
 		t.Fatalf("Didn't set content of resource\nexpected: '%v'\ngot:      '%v'", body.Text, r.Text)
 	}
 
+	resRes := unmarshalBody(t, res)
+	if resRes.User.ID != r.User.ID {
+		t.Fatalf("Response with user relationship:\nexpected: '%v'\ngot:      '%v'", r.User.ID, resRes.User.ID)
+	}
+
 	// FIXME test location header
 
 	res = req(postBody(t, struct{}{}))
@@ -128,7 +176,6 @@ func TestPost(t *testing.T) {
 	if res.Code != expected {
 		t.Fatalf("Error POSTting resource with not enough data\nexpected %d, got %d: %v", expected, res.Code, res)
 	}
-
 }
 
 func TestGet(t *testing.T) {
@@ -212,14 +259,14 @@ func mountResourceHandler(t *testing.T, r *Resource, handler resources.ModelHand
 	return mountHandler(t, modelProvider(handler))
 }
 
-func mountOwnerHandler(t *testing.T, u *User, handler resources.UserHandler) func(body io.Reader) *httptest.ResponseRecorder {
-	ownerProvider := func(handler resources.UserHandler) gin.HandlerFunc {
+func mountOwnerParentHandler(t *testing.T, u *User, p *User, handler resources.UserModelHandler) func(body io.Reader) *httptest.ResponseRecorder {
+	ownerParentProvider := func(handler resources.UserModelHandler) gin.HandlerFunc {
 		return func(ctx *gin.Context) {
-			handler(ctx, u)
+			handler(ctx, u, u)
 		}
 	}
 
-	return mountHandler(t, ownerProvider(handler))
+	return mountHandler(t, ownerParentProvider(handler))
 }
 
 func mountHandler(t *testing.T, handler func(*gin.Context)) func(body io.Reader) *httptest.ResponseRecorder {
@@ -233,14 +280,14 @@ func mountHandler(t *testing.T, handler func(*gin.Context)) func(body io.Reader)
 	}
 }
 
-func TestPublicFinder(t *testing.T) {
+func TestProvideModel(t *testing.T) {
 	r := Resource{}
 	assertNoErr(db.Save(&r).Error)
 
 	router = gin.New()
-	router.GET("/r/:id", res.PublicFinder(func(c *gin.Context, s resources.DBModel) {
+	router.GET("/r/:id", res.ProvideModel(func(c *gin.Context, s resources.DBModel) {
 		if s == nil {
-			t.Fatal("PublicFinder passed a nil DBModel")
+			t.Fatal("ProvideModel passed a nil DBModel")
 		}
 		c.String(200, "OK")
 	}))
@@ -266,50 +313,6 @@ func TestPublicFinder(t *testing.T) {
 	}
 }
 
-func TestPrivateFinder(t *testing.T) {
-	userID := uint(10)
-
-	r := Resource{UserID: userID}
-	assertNoErr(db.Save(&r).Error)
-
-	u := User{Model: gorm.Model{ID: userID}}
-	assertNoErr(db.Save(&u).Error)
-
-	userProvider := func(handler func(*gin.Context, resources.User)) gin.HandlerFunc {
-		return func(ctx *gin.Context) {
-			handler(ctx, &u)
-		}
-	}
-
-	router = gin.New()
-	router.GET("/r/:id", userProvider(res.PrivateFinder(func(c *gin.Context, s resources.DBModel) {
-		if s == nil {
-			t.Fatal("PrivateFinder passed a nil DBModel")
-		}
-		c.String(200, "OK")
-	})))
-
-	tests := []struct {
-		Code   int
-		UserID uint
-	}{
-		{200, r.UserID},
-		{401, userID + 1},
-		{401, 0},
-	}
-
-	path := fmt.Sprintf("/r/%d", r.ID)
-	for _, test := range tests {
-		u.ID = test.UserID
-
-		res := doRequest(t, "GET", path, nil)
-
-		if res.Code != test.Code {
-			t.Fatalf("Error finding resource at %s requested by %d, owned by %d\nexpected %d, got %d: %v", path, test.UserID, r.UserID, test.Code, res.Code, res)
-		}
-	}
-}
-
 func doRequest(t *testing.T, method string, path string, body io.Reader) *httptest.ResponseRecorder {
 
 	w := httptest.NewRecorder()
@@ -326,6 +329,16 @@ func body(t *testing.T, res *httptest.ResponseRecorder) string {
 		assertNoErr(err)
 	}
 	return strings.TrimSpace(b)
+}
+
+func unmarshalBody(t *testing.T, res *httptest.ResponseRecorder) *Resource {
+	b, err := ioutil.ReadAll(res.Body)
+	assertNoErr(err)
+
+	resource := Resource{}
+	err = json.Unmarshal(b, &resource)
+	assertNoErr(err)
+	return &resource
 }
 
 func postBody(t *testing.T, r interface{}) io.Reader {

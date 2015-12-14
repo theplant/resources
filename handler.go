@@ -20,18 +20,20 @@ const (
 )
 
 var (
-	// ErrRequestMissingMomentAttrs error represents missing attributes error when create or update a moment
-	ErrRequestMissingMomentAttrs = errors.New("request requires attribute location")
+	// ErrRequestMissingAttrs error represents missing attributes error when create or update a resource
+	ErrRequestMissingAttrs = errors.New("couldn't bind resource")
 )
 
 var regexpID = regexp.MustCompile(`\d+`)
 
 // DBModel defines an interface for ownership/authorisation when
-// finding and creating DB models
+// finding and creating DB models.
 type DBModel interface {
-	OwnerID() uint
-	SetOwnerID(uint)
 	GetID() uint
+	OwnerID() uint
+	SetOwner(User) error
+	ParentID() uint
+	SetParent(DBModel) error
 }
 
 // User defines an interface used by resource to "identify" a user,
@@ -53,6 +55,13 @@ type UserHandler func(*gin.Context, User)
 // the request context and the found model.
 type ModelHandler func(*gin.Context, DBModel)
 
+// UserModelHandler is a Gin handler function that requires a User
+// and a DBModel for correct operation. This kind of handler should
+// be passed to a wrapper that will find a user and a model somehow,
+// and call the handler with the request context and the found user
+// and model.
+type UserModelHandler func(*gin.Context, User, DBModel)
+
 // Resource is a collection of specialised gin.HandlerFunc functions
 // and handler wrappers for exporting Gorm-backed DB structs as HTTP
 // API resources/endpoints.
@@ -61,7 +70,7 @@ type Resource struct {
 	//
 	// * 200 with JSON body of all resouces of this type owned by the
 	//   given user
-	Collection UserHandler
+	Collection ModelHandler
 
 	// Post creates a single resource that will be owned by this user
 	// by:
@@ -76,7 +85,7 @@ type Resource struct {
 	//   calling `linker`)
 	//
 	// Panics on database error.
-	Post UserHandler
+	Post UserModelHandler
 
 	// Get responds with:
 	//
@@ -101,7 +110,7 @@ type Resource struct {
 	// Panics on database error.
 	Delete ModelHandler
 
-	// PublicFinder wraps a resource handler to provide the requested
+	// ProvideModel wraps a resource handler to provide the requested
 	// DB model as a parameter to the function. DB model is looked up
 	// via an `:id` param. It performs no authorisation.
 	//
@@ -110,17 +119,7 @@ type Resource struct {
 	// * Result of wrapped handler otherwise
 	//
 	// Panics on database error.
-	PublicFinder func(ModelHandler) gin.HandlerFunc
-
-	// PrivateFinder wraps a resource handler to provide the requested
-	// DB model as a parameter to the function *if the model's owner
-	// ID matches the user's ID*. DB model is looked up via an `:id`
-	// param.
-	//
-	// Responds with:
-	// * 401 if DB model owner ID != user ID
-	// * Result of wrapped handler via PublicFinder otherwise
-	PrivateFinder func(ModelHandler) UserHandler
+	ProvideModel func(ModelHandler) gin.HandlerFunc
 }
 
 // New creates a new resource that exposes the DBModel returned by
@@ -130,22 +129,27 @@ func New(db *gorm.DB, single func() DBModel, collection func() interface{}, link
 
 	r := Resource{}
 
-	r.Collection = func(ctx *gin.Context, paramUser User) {
+	r.Collection = func(ctx *gin.Context, owner DBModel) {
 		c := collection()
-		if err := db.Model(paramUser).Related(c).Error; err != nil && err != gorm.RecordNotFound {
+		if err := db.Model(owner).Related(c).Error; err != nil && err != gorm.RecordNotFound {
 			panic(err)
 		}
 
 		ctx.JSON(http.StatusOK, c)
 	}
 
-	r.Post = func(ctx *gin.Context, paramUser User) {
+	r.Post = func(ctx *gin.Context, user User, parent DBModel) {
 		s := single()
 		if ctx.BindJSON(s) != nil {
-			ctx.JSON(HTTPStatusUnprocessableEntity, errToJSON(ErrRequestMissingMomentAttrs))
+			ctx.JSON(HTTPStatusUnprocessableEntity, errToJSON(ErrRequestMissingAttrs))
 			return
 		}
-		s.SetOwnerID(paramUser.GetID())
+		if err := s.SetOwner(user); err != nil {
+			panic(err)
+		}
+		if err := s.SetParent(parent); err != nil {
+			panic(err)
+		}
 
 		if err := db.Create(s).Error; err != nil {
 			panic(err)
@@ -162,7 +166,7 @@ func New(db *gorm.DB, single func() DBModel, collection func() interface{}, link
 	r.Patch = func(ctx *gin.Context, s DBModel) {
 		newS := single()
 		if ctx.BindJSON(newS) != nil {
-			ctx.JSON(HTTPStatusUnprocessableEntity, errToJSON(ErrRequestMissingMomentAttrs))
+			ctx.JSON(HTTPStatusUnprocessableEntity, errToJSON(ErrRequestMissingAttrs))
 			return
 		}
 
@@ -181,7 +185,7 @@ func New(db *gorm.DB, single func() DBModel, collection func() interface{}, link
 		ctx.AbortWithStatus(http.StatusNoContent)
 	}
 
-	r.PublicFinder = func(handler ModelHandler) gin.HandlerFunc {
+	r.ProvideModel = func(handler ModelHandler) gin.HandlerFunc {
 		return func(ctx *gin.Context) {
 			id := ctx.Param("id")
 
@@ -199,19 +203,6 @@ func New(db *gorm.DB, single func() DBModel, collection func() interface{}, link
 			}
 
 			handler(ctx, s)
-		}
-	}
-
-	r.PrivateFinder = func(handler ModelHandler) UserHandler {
-		return func(ctx *gin.Context, u User) {
-			r.PublicFinder(func(ctx *gin.Context, s DBModel) {
-				if s.OwnerID() == u.GetID() {
-					handler(ctx, s)
-				} else {
-					ctx.AbortWithStatus(http.StatusUnauthorized)
-					return
-				}
-			})(ctx)
 		}
 	}
 
