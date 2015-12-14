@@ -10,19 +10,19 @@ import (
 	"github.com/theplant/resources"
 )
 
-func TestMergeWithLift(t *testing.T) {
+func TestMergeWithCurry(t *testing.T) {
 	user := &User{gorm.Model{ID: 1}}
 	model := &Resource{Model: gorm.Model{ID: 2}, UserID: user.ID}
 	context := &gin.Context{}
 
-	userProvider := resources.LiftUserProvider(func(handler resources.UserHandler, ctx *gin.Context) {
+	userProvider := resources.CurryUserProvider(func(handler resources.UserHandler, ctx *gin.Context) {
 		if ctx != context {
 			t.Fatal("provider called with unknown context")
 		}
 		handler(ctx, user)
 	})
 
-	modelProvider := resources.LiftModelProvider(func(handler resources.ModelHandler, ctx *gin.Context) {
+	modelProvider := resources.CurryModelProvider(func(handler resources.ModelHandler, ctx *gin.Context) {
 		if ctx != context {
 			t.Fatal("provider called with unknown context")
 		}
@@ -46,9 +46,9 @@ func TestMergeWithLift(t *testing.T) {
 
 func exampleProvider() {
 
-	var LiftedPreProcessModelUser = resources.LiftUserModelProcessor(func(accepter resources.UserModelHandler, ctx *gin.Context, user resources.User, model resources.DBModel) {
+	var CurriedPreProcessModelUser = resources.CurryUserModelProcessor(func(accepter resources.UserModelHandler, ctx *gin.Context, user resources.User, model resources.DBModel) {
 		// check model and user
-		fmt.Println("Lifted Pre-process model + user")
+		fmt.Println("Curried Pre-process model + user")
 		accepter(ctx, user, model)
 	})
 
@@ -98,7 +98,7 @@ func exampleProvider() {
 		}
 	}
 
-	chain := LiftedPreProcessModelUser(PreProcessModelUser(resources.Merge(ProvideAuthUser, PreProcessModel(ProvideModel))))
+	chain := CurriedPreProcessModelUser(PreProcessModelUser(resources.Merge(ProvideAuthUser, PreProcessModel(ProvideModel))))
 
 	chain(AcceptUserModel)(nil)
 
@@ -108,12 +108,12 @@ func exampleProvider() {
 	// Pre-process model
 	// Provide user
 	// Pre-process model + user
-	// Lifted Pre-process model + user
+	// Curried Pre-process model + user
 	// Accept user + model
 	// Provide model
 	// Pre-process model
 	// Provide user
 	// Pre-process model + user
-	// Lifted Pre-process model + user
+	// Curried Pre-process model + user
 	// Accept model
 }
