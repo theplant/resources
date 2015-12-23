@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"reflect"
 	"strconv"
 	"strings"
 	"testing"
@@ -28,6 +29,12 @@ type Resource struct {
 	UserID uint
 	User   User
 	Text   string `binding:"required"`
+}
+
+var resourceError error
+
+func (r *Resource) BeforeSave(db *gorm.DB) error {
+	return resourceError
 }
 
 // GetID part of resources.DBModel
@@ -175,6 +182,52 @@ func TestPost(t *testing.T) {
 	expected = resources.HTTPStatusUnprocessableEntity
 	if res.Code != expected {
 		t.Fatalf("Error POSTting resource with not enough data\nexpected %d, got %d: %v", expected, res.Code, res)
+	}
+}
+
+func TestPostWithError(t *testing.T) {
+	u := User{}
+	assertNoErr(db.Save(&u).Error)
+
+	req := mountOwnerParentHandler(t, &u, &u, res.Post)
+
+	body := struct {
+		Text string
+	}{"text"}
+
+	resourceError = errors.New("an error")
+	defer clearResourceErrors()
+
+	defer func() {
+		r := recover()
+		if r == nil {
+			t.Fatalf("Error POSTing resource\ndidn't panic on error when saving resource")
+		}
+	}()
+
+	req(postBody(t, body))
+}
+
+func TestPostWithAcceptableError(t *testing.T) {
+	u := User{}
+	assertNoErr(db.Save(&u).Error)
+
+	req := mountOwnerParentHandler(t, &u, &u, res.Post)
+
+	body := struct {
+		Text string
+	}{"text"}
+
+	resourceError = errors.New("acceptable error")
+
+	resources.AcceptableError = reflect.TypeOf(resourceError)
+	defer clearResourceErrors()
+
+	res := req(postBody(t, body))
+
+	expected := resources.HTTPStatusUnprocessableEntity
+	if res.Code != expected {
+		t.Fatalf("Error POSTing resource\nexpected %d, got %d: %v", expected, res.Code, res)
 	}
 }
 
@@ -360,4 +413,9 @@ func assertNoErr(err error) {
 	if err != nil {
 		panic(err)
 	}
+}
+
+func clearResourceErrors() {
+	resources.AcceptableError = nil
+	resourceError = nil
 }
