@@ -46,19 +46,41 @@ func TestMergeWithCurry(t *testing.T) {
 
 func exampleProvider() {
 
-	var CurriedPreProcessModelUser = resources.CurryUserModelProcessor(func(accepter resources.UserModelHandler, ctx *gin.Context, user resources.User, model resources.DBModel) {
+	CurriedPreProcessModelUser := resources.CurryUserModelProcessor(func(accepter resources.UserModelHandler, ctx *gin.Context, user resources.User, model resources.DBModel) {
 		// check model and user
 		fmt.Println("Curried Pre-process model + user")
 		accepter(ctx, user, model)
 	})
 
-	ProvideModel := func(handler resources.ModelHandler) gin.HandlerFunc {
-		return func(ctx *gin.Context) {
-			var model resources.DBModel // comes from somewhere
-			fmt.Println("Provide model")
-			handler(ctx, model)
-		}
-	}
+	ProvideAuthUser := resources.CurryUserProvider(func(handler resources.UserHandler, ctx *gin.Context) {
+		var u resources.User // comes from somewhere
+		fmt.Println("Provide user")
+		handler(ctx, u)
+	})
+
+	ProvideModel := resources.CurryModelProvider(func(handler resources.ModelHandler, ctx *gin.Context) {
+		var model resources.DBModel // comes from somewhere
+		fmt.Println("Provide model")
+		handler(ctx, model)
+	})
+
+	PreProcessUser := resources.CurryUserProcessor(func(accepter resources.UserHandler, ctx *gin.Context, user resources.User) {
+		// check user, then maybe call accepter
+		fmt.Println("Pre-process user")
+		accepter(ctx, user)
+	})
+
+	PreProcessModel := resources.CurryModelProcessor(func(accepter resources.ModelHandler, ctx *gin.Context, model resources.DBModel) {
+		// check model, then maybe call accepter
+		fmt.Println("Pre-process model")
+		accepter(ctx, model)
+	})
+
+	PreProcessModelUser := resources.CurryUserModelProcessor(func(accepter resources.UserModelHandler, ctx *gin.Context, user resources.User, model resources.DBModel) {
+		// check model and user
+		fmt.Println("Pre-process model + user")
+		accepter(ctx, user, model)
+	})
 
 	AcceptModel := func(ctx *gin.Context, model resources.DBModel) {
 		// do something with model
@@ -70,35 +92,7 @@ func exampleProvider() {
 		fmt.Println("Accept user + model")
 	}
 
-	PreProcessModel := func(provider resources.ModelProvider) resources.ModelProvider {
-		return func(accepter resources.ModelHandler) gin.HandlerFunc {
-			return provider(func(ctx *gin.Context, model resources.DBModel) {
-				// check model, then maybe call accepter
-				fmt.Println("Pre-process model")
-				accepter(ctx, model)
-			})
-		}
-	}
-
-	PreProcessModelUser := func(provider resources.UserModelProvider) resources.UserModelProvider {
-		return func(accepter resources.UserModelHandler) gin.HandlerFunc {
-			return provider(func(ctx *gin.Context, user resources.User, model resources.DBModel) {
-				// check model and user
-				fmt.Println("Pre-process model + user")
-				accepter(ctx, user, model)
-			})
-		}
-	}
-
-	ProvideAuthUser := func(handler resources.UserHandler) gin.HandlerFunc {
-		return func(ctx *gin.Context) {
-			var u resources.User // comes from somewhere
-			fmt.Println("Provide user")
-			handler(ctx, u)
-		}
-	}
-
-	chain := CurriedPreProcessModelUser(PreProcessModelUser(resources.Merge(ProvideAuthUser, PreProcessModel(ProvideModel))))
+	chain := CurriedPreProcessModelUser(PreProcessModelUser(resources.Merge(PreProcessUser(ProvideAuthUser), PreProcessModel(ProvideModel))))
 
 	chain(AcceptUserModel)(nil)
 
@@ -107,12 +101,14 @@ func exampleProvider() {
 	// Provide model
 	// Pre-process model
 	// Provide user
+	// Pre-process user
 	// Pre-process model + user
 	// Curried Pre-process model + user
 	// Accept user + model
 	// Provide model
 	// Pre-process model
 	// Provide user
+	// Pre-process user
 	// Pre-process model + user
 	// Curried Pre-process model + user
 	// Accept model

@@ -90,6 +90,19 @@ func CurryModelProvider(fn func(ModelHandler, *gin.Context)) ModelProvider {
 	}
 }
 
+// CurryUserProcessor curries a User processor in a similar way to
+// CurryUserProvider, but allows partial application of providers
+// rather than handlers
+func CurryUserProcessor(fn func(UserHandler, *gin.Context, User)) func(UserProvider) UserProvider {
+	return func(provider UserProvider) UserProvider {
+		return func(accepter UserHandler) gin.HandlerFunc {
+			return provider(func(ctx *gin.Context, user User) {
+				fn(accepter, ctx, user)
+			})
+		}
+	}
+}
+
 // CurryModelProcessor curries a DBModel processor in a similar way to
 // CurryUserProvider, but allows partial application of providers
 // rather than handlers
