@@ -121,7 +121,7 @@ func openDB() {
 		panic(err)
 	}
 
-	db = &db_
+	db = db_
 }
 
 func TestMain(m *testing.M) {
@@ -297,7 +297,7 @@ func TestDelete(t *testing.T) {
 
 	reloaded := &Resource{}
 	err := db.Where("id = ?", r.ID).Find(&reloaded).Error
-	if err != gorm.RecordNotFound {
+	if err != gorm.ErrRecordNotFound {
 		t.Fatalf("Deleted resource still found in database")
 	}
 }

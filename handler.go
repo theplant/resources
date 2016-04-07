@@ -141,7 +141,7 @@ func New(db *gorm.DB, single func() DBModel, collection func() interface{}, link
 
 	r.Collection = func(ctx *gin.Context, owner DBModel) {
 		c := collection()
-		if err := db.Model(owner).Related(c).Error; err != nil && err != gorm.RecordNotFound {
+		if err := db.Model(owner).Related(c).Error; err != nil && err != gorm.ErrRecordNotFound {
 			panic(err)
 		}
 
@@ -204,13 +204,13 @@ func New(db *gorm.DB, single func() DBModel, collection func() interface{}, link
 			id := ctx.Param("id")
 
 			if !regexpID.MatchString(id) {
-				ctx.AbortWithError(http.StatusNotFound, gorm.RecordNotFound)
+				ctx.AbortWithError(http.StatusNotFound, gorm.ErrRecordNotFound)
 				return
 			}
 
 			s := single()
-			if err := db.Where("id = ?", id).First(s).Error; err == gorm.RecordNotFound {
-				ctx.AbortWithError(http.StatusNotFound, gorm.RecordNotFound)
+			if err := db.Where("id = ?", id).First(s).Error; err == gorm.ErrRecordNotFound {
+				ctx.AbortWithError(http.StatusNotFound, gorm.ErrRecordNotFound)
 				return
 			} else if err != nil {
 				panic(err)
