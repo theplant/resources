@@ -1,0 +1,4 @@
+package: github.com/theplant/hsm2-backend/vendor/github.com/theplant/resources
+import:
+- package: github.com/gin-gonic/gin
+- package: github.com/jinzhu/gorm
