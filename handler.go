@@ -120,6 +120,10 @@ type Resource struct {
 	// Panics on database error.
 	Delete ModelHandler
 
+	// ProvideModelForKey provides a ProvideModel that looked up DB
+	// model via the given `key` parameter.
+	ProvideModelForKey func(string) func(ModelHandler) gin.HandlerFunc
+
 	// ProvideModel wraps a resource handler to provide the requested
 	// DB model as a parameter to the function. DB model is looked up
 	// via an `:id` param. It performs no authorisation.
@@ -199,26 +203,30 @@ func New(db *gorm.DB, single func() DBModel, collection func() interface{}, link
 		ctx.AbortWithStatus(http.StatusNoContent)
 	}
 
-	r.ProvideModel = func(handler ModelHandler) gin.HandlerFunc {
-		return func(ctx *gin.Context) {
-			id := ctx.Param("id")
+	r.ProvideModelForKey = func(key string) func(ModelHandler) gin.HandlerFunc {
+		return func(handler ModelHandler) gin.HandlerFunc {
+			return func(ctx *gin.Context) {
+				id := ctx.Param(key)
 
-			if !regexpID.MatchString(id) {
-				ctx.AbortWithError(http.StatusNotFound, gorm.ErrRecordNotFound)
-				return
+				if !regexpID.MatchString(id) {
+					ctx.AbortWithError(http.StatusNotFound, gorm.ErrRecordNotFound)
+					return
+				}
+
+				s := single()
+				if err := db.Where("id = ?", id).First(s).Error; err == gorm.ErrRecordNotFound {
+					ctx.AbortWithError(http.StatusNotFound, gorm.ErrRecordNotFound)
+					return
+				} else if err != nil {
+					panic(err)
+				}
+
+				handler(ctx, s)
 			}
-
-			s := single()
-			if err := db.Where("id = ?", id).First(s).Error; err == gorm.ErrRecordNotFound {
-				ctx.AbortWithError(http.StatusNotFound, gorm.ErrRecordNotFound)
-				return
-			} else if err != nil {
-				panic(err)
-			}
-
-			handler(ctx, s)
 		}
 	}
+
+	r.ProvideModel = r.ProvideModelForKey("id")
 
 	return r
 }
