@@ -1,5 +1,5 @@
-hash: c60b501f0e990a8ac013826c326119114f09bc123952e9a945ecfae6004def99
-updated: 2016-04-08T10:54:19.94172195+08:00
+hash: 0289ab1eda89ad65323e11f043dea80c83da335a4147e55356d375a9f65521d0
+updated: 2016-09-30T17:19:37.00300892+08:00
 imports:
 - name: github.com/gin-gonic/gin
   version: 233291e4e2d016084f9e42e786e45dad8858ace4
@@ -11,15 +11,19 @@ imports:
   subpackages:
   - proto
 - name: github.com/jinzhu/gorm
-  version: 5174cc5c242a728b435ea2be8a2f7f998e15429b
+  version: 5ec2f6ceb66dbb99077a2b48a5a963d073d5459d
 - name: github.com/jinzhu/inflection
-  version: 3272df6c21d04180007eb3349844c89a3856bc25
+  version: 74387dc39a75e970e7a3ae6a3386b5bd2e5c5cff
 - name: github.com/manucorporat/sse
   version: ee05b128a739a0fb76c7ebd3ae4810c1de808d6d
+- name: github.com/theplant/appkit
+  version: 517fa70273005b01cba71b9ec10b8705a5cf3b82
 - name: golang.org/x/net
   version: f315505cf3349909cdf013ea56690da34e96a451
   subpackages:
   - context
 - name: gopkg.in/go-playground/validator.v8
   version: c193cecd124b5cc722d7ee5538e945bdb3348435
-devImports: []
+- name: gopkg.in/yaml.v2
+  version: a5b47d31c556af34a302ce5d659e6fea44d90de0
+testImports: []

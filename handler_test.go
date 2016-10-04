@@ -132,7 +132,7 @@ func TestMain(m *testing.M) {
 	db.DropTableIfExists(&User{})
 	db.AutoMigrate(&User{})
 
-	res = resources.New(db,
+	res = resources.New(func(db *gorm.DB) *gorm.DB { return db },
 		func() resources.DBModel { return &Resource{} },
 		func() interface{} { return []Resource{} },
 		func(id uint) string { return fmt.Sprintf("/r/%d", id) })

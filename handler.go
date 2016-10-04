@@ -13,6 +13,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/gorm"
+	"github.com/theplant/appkit/contexts"
 )
 
 const (
@@ -139,11 +140,13 @@ type Resource struct {
 // New creates a new resource that exposes the DBModel returned by
 // `single` as a HTTP API. `collection` should return an array of the
 // same type as `single`.
-func New(db *gorm.DB, single func() DBModel, collection func() interface{}, linker func(id uint) string) Resource {
+func New(scoped func(*gorm.DB) *gorm.DB, single func() DBModel, collection func() interface{}, linker func(id uint) string) Resource {
 
 	r := Resource{}
 
 	r.Collection = func(ctx *gin.Context, owner DBModel) {
+		db := scoped(mustGetDB(ctx))
+
 		c := collection()
 		if err := db.Model(owner).Related(c).Error; err != nil && err != gorm.ErrRecordNotFound {
 			panic(err)
@@ -153,6 +156,8 @@ func New(db *gorm.DB, single func() DBModel, collection func() interface{}, link
 	}
 
 	r.Post = func(ctx *gin.Context, user User, parent DBModel) {
+		db := scoped(mustGetDB(ctx))
+
 		s := single()
 		if ctx.BindJSON(s) != nil {
 			ctx.JSON(HTTPStatusUnprocessableEntity, errToJSON(ErrRequestMissingAttrs))
@@ -182,6 +187,8 @@ func New(db *gorm.DB, single func() DBModel, collection func() interface{}, link
 	}
 
 	r.Patch = func(ctx *gin.Context, s DBModel) {
+		db := scoped(mustGetDB(ctx))
+
 		newS := single()
 		if ctx.BindJSON(newS) != nil {
 			ctx.JSON(HTTPStatusUnprocessableEntity, errToJSON(ErrRequestMissingAttrs))
@@ -196,6 +203,8 @@ func New(db *gorm.DB, single func() DBModel, collection func() interface{}, link
 	}
 
 	r.Delete = func(ctx *gin.Context, s DBModel) {
+		db := scoped(mustGetDB(ctx))
+
 		if err := db.Delete(s).Error; err != nil {
 			panic(err)
 		}
@@ -206,6 +215,8 @@ func New(db *gorm.DB, single func() DBModel, collection func() interface{}, link
 	r.ProvideModelForKey = func(key string) func(ModelHandler) gin.HandlerFunc {
 		return func(handler ModelHandler) gin.HandlerFunc {
 			return func(ctx *gin.Context) {
+				db := scoped(mustGetDB(ctx))
+
 				id := ctx.Param(key)
 
 				if !regexpID.MatchString(id) {
@@ -248,4 +259,14 @@ func absURL(req *http.Request, path string) string {
 	}
 
 	return base.ResolveReference(u).String()
+}
+
+func mustGetDB(ctx *gin.Context) *gorm.DB {
+	db, ok := contexts.Gorm(ctx.Request.Context())
+
+	if !ok {
+		panic(errors.New("no database in context"))
+	}
+
+	return db
 }
