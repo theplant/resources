@@ -20,6 +20,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/gorm"
 
+	"github.com/theplant/appkit/contexts"
 	"github.com/theplant/resources"
 )
 
@@ -326,10 +327,20 @@ func mountHandler(t *testing.T, handler func(*gin.Context)) func(body io.Reader)
 	router = gin.New()
 	path := "/test"
 	// Path doesn't matter, model is provided by modelProvider
+	router.Use(withGorm(db))
 	router.GET(path, handler)
 
 	return func(body io.Reader) *httptest.ResponseRecorder {
 		return doRequest(t, "GET", path, body)
+	}
+}
+
+func withGorm(db *gorm.DB) gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		r := ctx.Request
+		ctx.Request = r.WithContext(contexts.GormContext(r.Context(), db))
+
+		ctx.Next()
 	}
 }
 
@@ -338,6 +349,7 @@ func TestProvideModel(t *testing.T) {
 	assertNoErr(db.Save(&r).Error)
 
 	router = gin.New()
+	router.Use(withGorm(db))
 	router.GET("/r/:id", res.ProvideModel(func(c *gin.Context, s resources.DBModel) {
 		if s == nil {
 			t.Fatal("ProvideModel passed a nil DBModel")
