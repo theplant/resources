@@ -3,3 +3,6 @@ import:
 - package: github.com/gin-gonic/gin
 - package: github.com/jinzhu/gorm
 - package: github.com/theplant/appkit
+  version: gh3-database
+  subpackages:
+  - contexts

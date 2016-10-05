@@ -262,11 +262,5 @@ func absURL(req *http.Request, path string) string {
 }
 
 func mustGetDB(ctx *gin.Context) *gorm.DB {
-	db, ok := contexts.Gorm(ctx.Request.Context())
-
-	if !ok {
-		panic(errors.New("no database in context"))
-	}
-
-	return db
+	return contexts.MustGetGorm(ctx.Request.Context())
 }

@@ -1,11 +1,20 @@
-hash: 0289ab1eda89ad65323e11f043dea80c83da335a4147e55356d375a9f65521d0
-updated: 2016-09-30T17:19:37.00300892+08:00
+hash: 475a62c52e949db83b6d6362fa489c6758de6c5d22e9c09dd3355a460cee18c5
+updated: 2016-10-05T16:53:10.954790699+08:00
 imports:
 - name: github.com/gin-gonic/gin
   version: 233291e4e2d016084f9e42e786e45dad8858ace4
   subpackages:
   - binding
   - render
+- name: github.com/go-kit/kit
+  version: f4b6110ad931c7b2915f65bace5081ec60e17d64
+  subpackages:
+  - log
+  - log/levels
+- name: github.com/go-logfmt/logfmt
+  version: d4327190ff838312623b09bfeb50d7c93c8d9c1d
+- name: github.com/go-stack/stack
+  version: 100eb0c0a9c5b306ca2fb4f165df21d80ada4b82
 - name: github.com/golang/protobuf
   version: 2402d76f3d41f928c7902a765dfc872356dd3aad
   subpackages:
@@ -14,16 +23,19 @@ imports:
   version: 5ec2f6ceb66dbb99077a2b48a5a963d073d5459d
 - name: github.com/jinzhu/inflection
   version: 74387dc39a75e970e7a3ae6a3386b5bd2e5c5cff
+- name: github.com/kr/logfmt
+  version: b84e30acd515aadc4b783ad4ff83aff3299bdfe0
 - name: github.com/manucorporat/sse
   version: ee05b128a739a0fb76c7ebd3ae4810c1de808d6d
 - name: github.com/theplant/appkit
-  version: 517fa70273005b01cba71b9ec10b8705a5cf3b82
+  version: 9b8e647c314198b0175cb766af8e19d48479d100
+  subpackages:
+  - contexts
+  - log
 - name: golang.org/x/net
   version: f315505cf3349909cdf013ea56690da34e96a451
   subpackages:
   - context
 - name: gopkg.in/go-playground/validator.v8
   version: c193cecd124b5cc722d7ee5538e945bdb3348435
-- name: gopkg.in/yaml.v2
-  version: a5b47d31c556af34a302ce5d659e6fea44d90de0
 testImports: []
