@@ -1,5 +1,5 @@
-hash: 475a62c52e949db83b6d6362fa489c6758de6c5d22e9c09dd3355a460cee18c5
-updated: 2016-10-05T16:53:10.954790699+08:00
+hash: b966e9d36b5a8b7cc43123c2f27f017bf1c896641fe2c369ecbdac67f9242c4c
+updated: 2016-10-06T12:22:00.587024258+11:00
 imports:
 - name: github.com/gin-gonic/gin
   version: 233291e4e2d016084f9e42e786e45dad8858ace4
@@ -28,7 +28,7 @@ imports:
 - name: github.com/manucorporat/sse
   version: ee05b128a739a0fb76c7ebd3ae4810c1de808d6d
 - name: github.com/theplant/appkit
-  version: 9b8e647c314198b0175cb766af8e19d48479d100
+  version: b4f1a89b0be8029d215bf2e086bcaa4af8034b57
   subpackages:
   - contexts
   - log
@@ -38,4 +38,8 @@ imports:
   - context
 - name: gopkg.in/go-playground/validator.v8
   version: c193cecd124b5cc722d7ee5538e945bdb3348435
-testImports: []
+testImports:
+- name: github.com/lib/pq
+  version: 3cd0097429be7d611bb644ef85b42bfb102ceea4
+  subpackages:
+  - oid
