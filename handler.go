@@ -8,7 +8,6 @@ import (
 	"log"
 	"net/http"
 	"net/url"
-	"reflect"
 	"regexp"
 
 	"github.com/gin-gonic/gin"
@@ -24,15 +23,14 @@ var (
 	// ErrRequestMissingAttrs error represents missing attributes error when create or update a resource
 	ErrRequestMissingAttrs = errors.New("couldn't bind resource")
 
-	// AcceptableError will be compared against the type of errors
-	// from `db.Create`. If the types match, Post will respond with
+	// AcceptableError will check the errors from `db.Create`.
+	// If the errors is acceptable, Post will respond with
 	// HTTPStatusUnprocessableEntity instead of panicking.
-	//
-	// This could be a lot smarter, but it was the simplest thing that
-	// supported my use-case at the time, without introducing more
-	// package dependencies.
-	AcceptableError reflect.Type
+	AcceptableError AcceptableErrorChecker = func(error) bool { return false }
 )
+
+// AcceptableErrorChecker checks whether the given error is acceptable.
+type AcceptableErrorChecker func(err error) bool
 
 var regexpID = regexp.MustCompile(`\d+`)
 
@@ -166,7 +164,7 @@ func New(db *gorm.DB, single func() DBModel, collection func() interface{}, link
 		}
 
 		if err := db.Create(s).Error; err != nil {
-			if reflect.TypeOf(err) == AcceptableError {
+			if AcceptableError(err) {
 				ctx.JSON(HTTPStatusUnprocessableEntity, errToJSON(err))
 			} else {
 				panic(err)
