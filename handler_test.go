@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"reflect"
 	"strconv"
 	"strings"
 	"testing"
@@ -220,7 +219,7 @@ func TestPostWithAcceptableError(t *testing.T) {
 
 	resourceError = errors.New("acceptable error")
 
-	resources.AcceptableError = reflect.TypeOf(resourceError)
+	resources.AcceptableError = func(err error) bool { return err == resourceError }
 	defer clearResourceErrors()
 
 	res := req(postBody(t, body))
@@ -416,6 +415,6 @@ func assertNoErr(err error) {
 }
 
 func clearResourceErrors() {
-	resources.AcceptableError = nil
+	resources.AcceptableError = func(error) bool { return false }
 	resourceError = nil
 }
