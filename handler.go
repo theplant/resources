@@ -192,7 +192,7 @@ func New(db *gorm.DB, single func() DBModel, collection func() interface{}, link
 			panic(err)
 		}
 
-		ctx.JSON(http.StatusOK, newS)
+		ctx.JSON(http.StatusOK, s)
 	}
 
 	r.Delete = func(ctx *gin.Context, s DBModel) {
