@@ -13,7 +13,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/gorm"
-	"github.com/theplant/appkit/contexts"
+	"github.com/theplant/appkit/db"
 )
 
 const (
@@ -262,5 +262,5 @@ func absURL(req *http.Request, path string) string {
 }
 
 func mustGetDB(ctx *gin.Context) *gorm.DB {
-	return contexts.MustGetGorm(ctx.Request.Context())
+	return db.MustGetGorm(ctx.Request.Context())
 }
