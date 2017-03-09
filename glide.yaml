@@ -2,3 +2,6 @@ package: github.com/theplant/resources
 import:
 - package: github.com/gin-gonic/gin
 - package: github.com/jinzhu/gorm
+- package: github.com/theplant/appkit
+  subpackages:
+  - contexts
